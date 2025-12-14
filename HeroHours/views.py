@@ -102,7 +102,7 @@ def handle_bulk_updates(user_id, time = None):
         getall = models.Users.objects.filter(Checked_In=True)
 
     for user in getall:
-        log = models.ActivityLog(user_id=user.User_ID,entered=user.User_ID, operation='Check In' if user_id == '-404' else 'Check Out',
+        log = models.ActivityLog(user_id=user.User_ID, entered=str(user.User_ID), operation='Check In' if user_id == '-404' else 'Check Out',
                                  status='Success')
 
         if user_id == '-404':
