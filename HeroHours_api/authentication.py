@@ -88,11 +88,10 @@ class URLTokenAuthentication(BaseAuthentication):
 
 
 def get_authorization_key(request):
-    # TODO: make this look correct (change comments and names)
     """
-    Return request's 'key' parameter, as a bytestring.
+    Return request's 'key' parameter from the URL query string, as a bytestring.
 
-    Hide some test client ickyness where the parameter can be unicode.
+    Handle encoding for compatibility with Django test client where the parameter may be unicode.
     """
     auth = request.GET.get('key', b'')
     if isinstance(auth, str):
