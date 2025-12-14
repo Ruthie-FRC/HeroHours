@@ -13,7 +13,7 @@ A Django-based time tracking system for managing member check-ins and check-outs
 
 ## Tech Stack
 
-- **Backend**: Django 5.1.2
+- **Backend**: Django 5.1.12
 - **Database**: PostgreSQL (production) / SQLite (development)
 - **API**: Django REST Framework
 - **Deployment**: Heroku-ready with Gunicorn
