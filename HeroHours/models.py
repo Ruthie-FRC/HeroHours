@@ -15,7 +15,6 @@ class Users(models.Model):
 
 
     def get_total_hours(self):
-        #print(f"Total Seconds: {self.Total_Seconds}")
         hours, remainder = divmod(int(self.Total_Seconds), 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours}h {minutes}m {seconds}s"
@@ -32,22 +31,23 @@ class Users(models.Model):
 
 class ActivityLog(models.Model):
     OPERATION_CHOICES = [
-        ('checkIn', 'Check In'),
-        ('checkOut', 'Check Out'),
-        ('none', "None"),
-        ('autoCheckOut','Auto Check Out'),
+        ('Check In', 'Check In'),
+        ('Check Out', 'Check Out'),
+        ('None', "None"),
+        ('Auto Check Out', 'Auto Check Out'),
+        ('Reset', 'Reset'),
     ]
 
     STATUS_CHOICES = [
-        ('success', 'Success'),
-        ('error', 'Error'),
-        ('user not found', 'User Not Found'),
-        ('inactive user', 'Inactive User'),
+        ('Success', 'Success'),
+        ('Error', 'Error'),
+        ('User Not Found', 'User Not Found'),
+        ('Inactive User', 'Inactive User'),
     ]
 
     user = models.ForeignKey(Users, models.CASCADE, blank=True, null=True)
     entered = models.TextField()
-    operation = models.CharField(max_length=14, choices=OPERATION_CHOICES)
+    operation = models.CharField(max_length=15, choices=OPERATION_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     message = models.TextField(default='')  # Optional message field
     timestamp = models.DateTimeField(auto_now_add=True)  # Automatically set the timestamp when creating
