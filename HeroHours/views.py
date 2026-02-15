@@ -129,7 +129,7 @@ def handle_bulk_updates(user_id, at_time=None):
         updated_log.append(log)
         updated_users.append(user)
 
-    models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_Out"])
+    models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_In", "Last_Out"])
     models.ActivityLog.objects.bulk_create(updated_log)
     # Redirect to index after bulk updates
     return redirect('index')

@@ -43,7 +43,7 @@ def check_out(modeladmin, request, queryset):
             user.Last_In = right_now
         user.Total_Hours = ExpressionWrapper(F('Total_Hours') + (right_now - user.Last_In),
                                              output_field=DurationField())
-        user.Total_Seconds += round((right_now - user.Last_In).total_seconds())
+        user.Total_Seconds = F('Total_Seconds') + round((right_now - user.Last_In).total_seconds())
         user.Last_Out = right_now
         updated_log.append(lognew)
         updated_users.append(user)
