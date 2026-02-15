@@ -1,25 +1,29 @@
+# Standard library imports
 import csv
 import json
 from types import SimpleNamespace
 
+# Third-party imports
 import django.contrib.auth.models as authModels
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
+from django.contrib.admin.utils import unquote
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, DurationField, ExpressionWrapper
+from django.db.models import DurationField, ExpressionWrapper, F
 from django.forms import model_to_dict
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
-from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-from django.utils.text import capfirst
-from HeroHours.forms import CustomActionForm
-from . import models
-from .models import Users, ActivityLog
-from rest_framework.authtoken.admin import TokenAdmin
-from django.contrib.admin.utils import (unquote)
 from django.template.response import TemplateResponse
+from django.utils import timezone
+from django.utils.text import capfirst
+from django.utils.translation import gettext_lazy as _
+from rest_framework.authtoken.admin import TokenAdmin
+
+# Local imports
+from . import models
+from .forms import CustomActionForm
+from .models import ActivityLog, Users
 # Register your models here.
 
 
@@ -101,6 +105,7 @@ def reset(modeladmin, request, queryset):
     models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_Out", "Last_In"])
     models.ActivityLog.objects.bulk_create(updated_log)
 
+@admin.action(description="Create a Staff User")
 def create_staff_user_action(modeladmin, request, queryset):
     selected_user = queryset.first()
     userdata = model_to_dict(selected_user)
@@ -108,9 +113,6 @@ def create_staff_user_action(modeladmin, request, queryset):
     form = CustomActionForm(
         initial={'hidden_data': json.dumps({'First_Name': userdata['First_Name'], 'Last_Name': userdata['Last_Name']})})
     return render(request, 'admin/custom_action_form.html', {'form': form})
-
-
-create_staff_user_action.short_description = "Create a Staff User"
 
 
 class TotalHoursFilter(SimpleListFilter):
@@ -126,7 +128,7 @@ class TotalHoursFilter(SimpleListFilter):
             ('25hours', _('Less than 25 hours')),
 
             ('o25hours', _('Over 25 hours')),
-            ('o50hours',_('Over 50 hours'))
+            ('o50hours', _('Over 50 hours'))
         ]
 
     def queryset(self, request, queryset):
@@ -157,12 +159,12 @@ def export_as_csv(self, request, queryset):
     field_names = [field.name for field in meta.fields]
 
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename={}.csv'.format(meta)
+    response['Content-Disposition'] = f'attachment; filename={meta}.csv'
     writer = csv.writer(response)
 
     writer.writerow(field_names)
     for obj in queryset:
-        row = writer.writerow([getattr(obj, field) for field in field_names])
+        writer.writerow([getattr(obj, field) for field in field_names])
 
     return response
 
@@ -175,11 +177,9 @@ class MemberAdmin(admin.ModelAdmin):
     search_fields = ['User_ID', 'Last_Name', 'First_Name']
     list_filter = ['Checked_In', TotalHoursFilter]
 
+    @admin.display(description="Total Hours", ordering="Total_Seconds")
     def display_total_hours(self, obj):
         return obj.get_total_hours()
-
-    display_total_hours.short_description = "Total Hours"
-    display_total_hours.admin_order_field = "Total_Seconds"
 
 
     """
@@ -277,30 +277,27 @@ class ActivityAdminView(admin.ModelAdmin):
     search_fields = ['timestamp']
     actions = [export_as_csv]
 
+    @admin.display(description='Date')
     def get_date_only(self, obj):
         return timezone.localtime(obj.timestamp).date()
+    
+    @admin.display(description='Entered')
     def get_entered_data(self, obj):
         return obj.entered
-    get_entered_data.short_description = 'Entered'
 
-
-    get_date_only.short_description = 'Date'
-
+    @admin.display(description='Name')
     def get_name(self, obj):
         if obj.user:
             return f'{obj.user.First_Name} {obj.user.Last_Name}'
-        return  'None'
-    get_name.short_description = 'Name'
+        return 'None'
 
+    @admin.display(description='Status')
     def get_status(self, obj):
         return obj.status
 
-    get_status.short_description = 'Status'
-
+    @admin.display(description='Operation')
     def get_op(self, obj):
         return obj.operation
-
-    get_op.short_description = 'Operation'
 
 
 def is_superuser(user):
