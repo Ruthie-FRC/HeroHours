@@ -2,7 +2,8 @@
 import json
 import logging
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Optional
 
 # Third-party imports
 import requests
@@ -11,7 +12,7 @@ from django.contrib.auth.decorators import permission_required
 from django.core import serializers
 from django.db.models import DurationField, ExpressionWrapper, F
 from django.forms.models import model_to_dict
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 @permission_required("HeroHours.change_users")
-def index(request):
+def index(request: HttpRequest) -> HttpResponse:
     """
     Main dashboard view displaying active members and check-in status.
     
@@ -49,7 +50,7 @@ def index(request):
 
 @permission_required("HeroHours.change_users", raise_exception=True)
 @ratelimit(key='user', rate='60/m', method='POST')
-def handle_entry(request):
+def handle_entry(request: HttpRequest) -> JsonResponse:
     user_input = request.POST.get('user_input', '').strip()
     
     # Input validation: limit length and sanitize
@@ -98,7 +99,7 @@ def handle_entry(request):
     return JsonResponse(operation_result)
 
 
-def handle_special_commands(user_id):
+def handle_special_commands(user_id: str) -> Optional[HttpResponse]:
     """
     Process special command inputs like 'Send', 'admin', etc.
     
@@ -120,7 +121,7 @@ def handle_special_commands(user_id):
     return None
 
 
-def handle_bulk_updates(user_id, at_time=None):
+def handle_bulk_updates(user_id: str, at_time: Optional[datetime] = None) -> HttpResponse:
     """
     Bulk check-in or check-out all users (DEBUG mode only for check-in).
     
@@ -174,7 +175,7 @@ def handle_bulk_updates(user_id, at_time=None):
     return redirect('index')
 
 
-def check_in_or_out(user, right_now, log, count):
+def check_in_or_out(user: models.Users, right_now: datetime, log: models.ActivityLog, count: int) -> dict:
     """
     Toggle user check-in status and update hours.
     
@@ -230,7 +231,7 @@ APP_SCRIPT_URL = os.environ.get('APP_SCRIPT_URL', '')
 
 @permission_required("HeroHours.change_users", raise_exception=True)
 @ratelimit(key='user', rate='10/m', method='POST')
-def send_data_to_google_sheet(request):
+def send_data_to_google_sheet(request: HttpRequest) -> JsonResponse:
     """
     Export all users and activity logs to Google Sheets via Apps Script.
     
@@ -259,9 +260,11 @@ def send_data_to_google_sheet(request):
     except Exception as e:
         logger.error("Failed to send data to Google Sheet: %s", e)
         return JsonResponse({'status': 'error', 'message': str(e), 'count': count})
+
+
 @permission_required("HeroHours.view_users", raise_exception=True)
 @ratelimit(key='user', rate='30/m', method='GET')
-def sheet_pull(request):
+def sheet_pull(request: HttpRequest) -> HttpResponse:
     """
     Export users data to CSV format.
     This view is deprecated. Use the API endpoint /api/sheet-pull/ with token authentication instead.
@@ -270,14 +273,14 @@ def sheet_pull(request):
     response = 'User_ID,First_Name,Last_Name,Total_Hours,Total_Seconds,Last_In,Last_Out,Is_Active,\n'
     for member in members:
         response += f"{member.User_ID},{member.First_Name},{member.Last_Name},{member.get_total_hours()},{member.Total_Seconds},{member.Last_In},{member.Last_Out},{member.Is_Active}\n"
-    return HttpResponse(response,content_type='text/csv')
+    return HttpResponse(response, content_type='text/csv')
 
 
-def logout_view(request):
+def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
 
 
 @permission_required("HeroHours.change_users")
-def live_view(request):
+def live_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'live.html')

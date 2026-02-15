@@ -19,7 +19,7 @@ class Users(models.Model):
     Last_Out = models.DateTimeField(null=True, blank=True)
     Is_Active = models.BooleanField(default=True)
 
-    def get_total_hours(self):
+    def get_total_hours(self) -> str:
         """
         Format total seconds as a human-readable hours/minutes/seconds string.
         
