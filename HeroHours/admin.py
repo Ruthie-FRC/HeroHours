@@ -1,25 +1,29 @@
+# Standard library imports
 import csv
 import json
 from types import SimpleNamespace
 
+# Third-party imports
 import django.contrib.auth.models as authModels
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
+from django.contrib.admin.utils import unquote
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, DurationField, ExpressionWrapper
+from django.db.models import DurationField, ExpressionWrapper, F
 from django.forms import model_to_dict
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
-from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-from django.utils.text import capfirst
-from HeroHours.forms import CustomActionForm
-from . import models
-from .models import Users, ActivityLog
-from rest_framework.authtoken.admin import TokenAdmin
-from django.contrib.admin.utils import (unquote)
 from django.template.response import TemplateResponse
+from django.utils import timezone
+from django.utils.text import capfirst
+from django.utils.translation import gettext_lazy as _
+from rest_framework.authtoken.admin import TokenAdmin
+
+# Local imports
+from . import models
+from .forms import CustomActionForm
+from .models import ActivityLog, Users
 # Register your models here.
 
 
@@ -124,7 +128,7 @@ class TotalHoursFilter(SimpleListFilter):
             ('25hours', _('Less than 25 hours')),
 
             ('o25hours', _('Over 25 hours')),
-            ('o50hours',_('Over 50 hours'))
+            ('o50hours', _('Over 50 hours'))
         ]
 
     def queryset(self, request, queryset):
@@ -155,12 +159,12 @@ def export_as_csv(self, request, queryset):
     field_names = [field.name for field in meta.fields]
 
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename={}.csv'.format(meta)
+    response['Content-Disposition'] = f'attachment; filename={meta}.csv'
     writer = csv.writer(response)
 
     writer.writerow(field_names)
     for obj in queryset:
-        row = writer.writerow([getattr(obj, field) for field in field_names])
+        writer.writerow([getattr(obj, field) for field in field_names])
 
     return response
 

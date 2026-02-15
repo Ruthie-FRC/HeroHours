@@ -1,11 +1,14 @@
+# Third-party imports
+from django.db.models import Subquery
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
 from rest_framework_csv import renderers as csv_renderers
-from django.db.models import Subquery
-from HeroHours.models import Users, ActivityLog
+
+# Local imports
+from HeroHours.models import ActivityLog, Users
 from HeroHours_api.authentication import URLTokenAuthentication
 
 
@@ -66,9 +69,9 @@ class MeetingPullAPI(APIView):
             
         query = ActivityLog.objects.filter(id__in=Subquery(
             ActivityLog.objects.all()
-            .filter(timestamp__day=day, timestamp__month=month, timestamp__year=year, operation='Check In') \
-                .order_by('user_id').distinct('user_id').values('id')
-        )).order_by('user__Last_Name','user__First_Name').values('user_id','user__First_Name','user__Last_Name')
+            .filter(timestamp__day=day, timestamp__month=month, timestamp__year=year, operation='Check In')
+            .order_by('user_id').distinct('user_id').values('id')
+        )).order_by('user__Last_Name', 'user__First_Name').values('user_id', 'user__First_Name', 'user__Last_Name')
         members = list(query)
 
         return Response(members, status=status.HTTP_200_OK)

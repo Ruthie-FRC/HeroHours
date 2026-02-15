@@ -1,22 +1,24 @@
+# Standard library imports
 import json
 import logging
+import os
 from datetime import timedelta
 
+# Third-party imports
 import requests
-import os
-
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import permission_required
-from django.db.models import F, DurationField, ExpressionWrapper
-from django.shortcuts import render, redirect
-from django.utils import timezone
 from django.core import serializers
-from dotenv import load_dotenv, find_dotenv
-from django_ratelimit.decorators import ratelimit
-
-from . import models
-from django.http import JsonResponse, HttpResponse
+from django.db.models import DurationField, ExpressionWrapper, F
 from django.forms.models import model_to_dict
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone
+from django_ratelimit.decorators import ratelimit
+from dotenv import find_dotenv, load_dotenv
+
+# Local imports
+from . import models
 
 load_dotenv(find_dotenv())
 
@@ -36,13 +38,13 @@ def index(request):
         HttpResponse: Rendered members.html template with user data
     """
     # Query all users from the database
-    usersData = models.Users.objects.filter(Is_Active=True).order_by('Last_Name','First_Name')
+    users_data = models.Users.objects.filter(Is_Active=True).order_by('Last_Name', 'First_Name')
     users_checked_in = models.Users.objects.filter(Checked_In=True).count()
     local_log_entries = models.ActivityLog.objects.all()[:9]
 
     # Pass the users data to the template
     return render(request, 'members.html',
-                  {'usersData': usersData, "checked_in": users_checked_in, 'local_log_entries': local_log_entries})
+                  {'usersData': users_data, "checked_in": users_checked_in, 'local_log_entries': local_log_entries})
 
 
 @permission_required("HeroHours.change_users", raise_exception=True)
@@ -185,9 +187,9 @@ def check_in_or_out(user, right_now, log, count):
     Returns:
         dict: Status information including operation, state, log, and count
     """
-    count2=count
+    new_count = count
     if user.Checked_In:
-        count2 -= 1
+        new_count -= 1
         state = False
         log.operation = 'Check Out'
         if not user.Last_In:
@@ -197,7 +199,7 @@ def check_in_or_out(user, right_now, log, count):
         user.Total_Seconds = F('Total_Seconds') + round((right_now - user.Last_In).total_seconds())
         user.Last_Out = right_now
     else:
-        count2 += 1
+        new_count += 1
         state = True
         log.operation = 'Check In'
         user.Last_In = right_now
@@ -210,7 +212,7 @@ def check_in_or_out(user, right_now, log, count):
         state = None
         log.status = "Inactive User"
     else:
-        count = count2
+        count = new_count
         user.save()
 
     # Save log and user updates
