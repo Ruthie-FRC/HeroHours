@@ -124,7 +124,7 @@ def handle_bulk_updates(user_id, at_time=None):
                 user.Total_Hours = ExpressionWrapper(F('Total_Hours') + (at_time - user.Last_In),
                                                   output_field=DurationField())
                 user.Total_Seconds = F('Total_Seconds') + round((at_time - user.Last_In).total_seconds())
-        user.Last_Out = at_time
+            user.Last_Out = at_time
 
         updated_log.append(log)
         updated_users.append(user)

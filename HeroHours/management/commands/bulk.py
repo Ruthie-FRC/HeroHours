@@ -1,7 +1,5 @@
-import csv
 from datetime import datetime
 from django.core.management.base import BaseCommand
-from HeroHours.models import Users
 from HeroHours.views import handle_bulk_updates
 
 class Command(BaseCommand):
