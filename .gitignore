@@ -292,3 +292,4 @@ fabric.properties
 
 db-data
 db
+logs/

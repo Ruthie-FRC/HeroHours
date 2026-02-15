@@ -1,4 +1,3 @@
-import base64
 import json
 import logging
 from datetime import timedelta
@@ -6,14 +5,14 @@ from datetime import timedelta
 import requests
 import os
 
-from django.contrib.auth import authenticate, logout
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import permission_required
-from django.core.exceptions import BadRequest, PermissionDenied
 from django.db.models import F, DurationField, ExpressionWrapper
 from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.core import serializers
 from dotenv import load_dotenv, find_dotenv
+from django_ratelimit.decorators import ratelimit
 
 from . import models
 from django.http import JsonResponse, HttpResponse
@@ -38,8 +37,17 @@ def index(request):
 
 
 @permission_required("HeroHours.change_users", raise_exception=True)
+@ratelimit(key='user', rate='60/m', method='POST')
 def handle_entry(request):
-    user_input = request.POST.get('user_input')
+    user_input = request.POST.get('user_input', '').strip()
+    
+    # Input validation: limit length and sanitize
+    if not user_input:
+        return JsonResponse({'status': 'Error', 'message': 'No input provided'})
+    
+    if len(user_input) > 100:
+        return JsonResponse({'status': 'Error', 'message': 'Input too long'})
+    
     right_now = timezone.now()
 
     # Handle special commands first
@@ -69,8 +77,9 @@ def handle_entry(request):
                 {'status': 'User Not Found', 'user_id': None, 'operation': None, 'newlog': model_to_dict(log),
                  'count': count})
     except Exception as e:
+        logger.error(f"Error in handle_entry: {str(e)}")
         return JsonResponse({'status': "Error", 'newlog': {'userID': user_input, 'operation': "None", 'status': 'Error',
-                                                           'message': str(e)}, 'state': None, 'count': count})
+                                                           'message': 'An error occurred'}, 'state': None, 'count': count})
 
     # Perform Check-In or Check-Out operations
     operation_result = check_in_or_out(user, right_now, log, count)
@@ -178,6 +187,7 @@ APP_SCRIPT_URL = os.environ.get('APP_SCRIPT_URL', '')
 
 
 @permission_required("HeroHours.change_users", raise_exception=True)
+@ratelimit(key='user', rate='10/m', method='POST')
 def send_data_to_google_sheet(request):
     users = models.Users.objects.all()
     serialized_data = serializers.serialize('json', users, use_natural_foreign_keys=True)
@@ -198,15 +208,13 @@ def send_data_to_google_sheet(request):
     except Exception as e:
         logger.error("Failed to send data to Google Sheet: %s", e)
         return JsonResponse({'status': 'error', 'message': str(e), 'count': count})
+@permission_required("HeroHours.view_users", raise_exception=True)
+@ratelimit(key='user', rate='30/m', method='GET')
 def sheet_pull(request):
-    key = request.GET.get('key')
-    if not key:
-        raise BadRequest()
-
-    username, password = base64.b64decode(key).decode('ascii').split(":")
-    user = authenticate(request, username=username, password=password)
-    if not user:
-        raise PermissionDenied()
+    """
+    Export users data to CSV format.
+    This view is deprecated. Use the API endpoint /api/sheet-pull/ with token authentication instead.
+    """
     members = models.Users.objects.all()
     response = 'User_ID,First_Name,Last_Name,Total_Hours,Total_Seconds,Last_In,Last_Out,Is_Active,\n'
     for member in members:
