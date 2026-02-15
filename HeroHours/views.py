@@ -1,23 +1,25 @@
-import base64
+# Standard library imports
 import json
 import logging
-from datetime import timedelta
-
-import requests
 import os
+from datetime import datetime, timedelta
+from typing import Optional
 
-from django.contrib.auth import authenticate, logout
+# Third-party imports
+import requests
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import permission_required
-from django.core.exceptions import BadRequest, PermissionDenied
-from django.db.models import F, DurationField, ExpressionWrapper
-from django.shortcuts import render, redirect
-from django.utils import timezone
 from django.core import serializers
-from dotenv import load_dotenv, find_dotenv
-
-from . import models
-from django.http import JsonResponse, HttpResponse
+from django.db.models import DurationField, ExpressionWrapper, F
 from django.forms.models import model_to_dict
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone
+from django_ratelimit.decorators import ratelimit
+from dotenv import find_dotenv, load_dotenv
+
+# Local imports
+from . import models
 
 load_dotenv(find_dotenv())
 
@@ -26,20 +28,38 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 @permission_required("HeroHours.change_users")
-def index(request):
+def index(request: HttpRequest) -> HttpResponse:
+    """
+    Main dashboard view displaying active members and check-in status.
+    
+    Args:
+        request: HTTP request object
+        
+    Returns:
+        HttpResponse: Rendered members.html template with user data
+    """
     # Query all users from the database
-    usersData = models.Users.objects.filter(Is_Active=True).order_by('Last_Name','First_Name')
+    users_data = models.Users.objects.filter(Is_Active=True).order_by('Last_Name', 'First_Name')
     users_checked_in = models.Users.objects.filter(Checked_In=True).count()
     local_log_entries = models.ActivityLog.objects.all()[:9]
 
     # Pass the users data to the template
     return render(request, 'members.html',
-                  {'usersData': usersData, "checked_in": users_checked_in, 'local_log_entries': local_log_entries})
+                  {'usersData': users_data, "checked_in": users_checked_in, 'local_log_entries': local_log_entries})
 
 
 @permission_required("HeroHours.change_users", raise_exception=True)
-def handle_entry(request):
-    user_input = request.POST.get('user_input')
+@ratelimit(key='user', rate='60/m', method='POST')
+def handle_entry(request: HttpRequest) -> JsonResponse:
+    user_input = request.POST.get('user_input', '').strip()
+    
+    # Input validation: limit length and sanitize
+    if not user_input:
+        return JsonResponse({'status': 'Error', 'message': 'No input provided'})
+    
+    if len(user_input) > 100:
+        return JsonResponse({'status': 'Error', 'message': 'Input too long'})
+    
     right_now = timezone.now()
 
     # Handle special commands first
@@ -69,8 +89,9 @@ def handle_entry(request):
                 {'status': 'User Not Found', 'user_id': None, 'operation': None, 'newlog': model_to_dict(log),
                  'count': count})
     except Exception as e:
+        logger.error(f"Error in handle_entry: {str(e)}")
         return JsonResponse({'status': "Error", 'newlog': {'userID': user_input, 'operation': "None", 'status': 'Error',
-                                                           'message': str(e)}, 'state': None, 'count': count})
+                                                           'message': 'An error occurred'}, 'state': None, 'count': count})
 
     # Perform Check-In or Check-Out operations
     operation_result = check_in_or_out(user, right_now, log, count)
@@ -78,7 +99,16 @@ def handle_entry(request):
     return JsonResponse(operation_result)
 
 
-def handle_special_commands(user_id):
+def handle_special_commands(user_id: str) -> Optional[HttpResponse]:
+    """
+    Process special command inputs like 'Send', 'admin', etc.
+    
+    Args:
+        user_id: Input string from user
+        
+    Returns:
+        HttpResponse or None: Redirect response if special command, None otherwise
+    """
     if user_id == "Send":
         return redirect('send_data_to_google_sheet')
 
@@ -91,7 +121,17 @@ def handle_special_commands(user_id):
     return None
 
 
-def handle_bulk_updates(user_id, at_time=None):
+def handle_bulk_updates(user_id: str, at_time: Optional[datetime] = None) -> HttpResponse:
+    """
+    Bulk check-in or check-out all users (DEBUG mode only for check-in).
+    
+    Args:
+        user_id: '-404' for bulk check-in, '+404' for auto check-out
+        at_time: Optional datetime for the operation, defaults to now
+        
+    Returns:
+        HttpResponse: Redirect to index page
+    """
     if at_time is None:
         at_time = timezone.now()
     updated_users = []
@@ -135,10 +175,22 @@ def handle_bulk_updates(user_id, at_time=None):
     return redirect('index')
 
 
-def check_in_or_out(user, right_now, log, count):
-    count2=count
+def check_in_or_out(user: models.Users, right_now: datetime, log: models.ActivityLog, count: int) -> dict:
+    """
+    Toggle user check-in status and update hours.
+    
+    Args:
+        user: Users model instance
+        right_now: Current datetime
+        log: ActivityLog instance to save
+        count: Current count of checked-in users
+        
+    Returns:
+        dict: Status information including operation, state, log, and count
+    """
+    new_count = count
     if user.Checked_In:
-        count2 -= 1
+        new_count -= 1
         state = False
         log.operation = 'Check Out'
         if not user.Last_In:
@@ -148,7 +200,7 @@ def check_in_or_out(user, right_now, log, count):
         user.Total_Seconds = F('Total_Seconds') + round((right_now - user.Last_In).total_seconds())
         user.Last_Out = right_now
     else:
-        count2 += 1
+        new_count += 1
         state = True
         log.operation = 'Check In'
         user.Last_In = right_now
@@ -161,7 +213,7 @@ def check_in_or_out(user, right_now, log, count):
         state = None
         log.status = "Inactive User"
     else:
-        count = count2
+        count = new_count
         user.save()
 
     # Save log and user updates
@@ -178,7 +230,17 @@ APP_SCRIPT_URL = os.environ.get('APP_SCRIPT_URL', '')
 
 
 @permission_required("HeroHours.change_users", raise_exception=True)
-def send_data_to_google_sheet(request):
+@ratelimit(key='user', rate='10/m', method='POST')
+def send_data_to_google_sheet(request: HttpRequest) -> JsonResponse:
+    """
+    Export all users and activity logs to Google Sheets via Apps Script.
+    
+    Args:
+        request: HTTP request object
+        
+    Returns:
+        JsonResponse: Status of the export operation
+    """
     users = models.Users.objects.all()
     serialized_data = serializers.serialize('json', users, use_natural_foreign_keys=True)
     serialized_data2 = serializers.serialize('json', models.ActivityLog.objects.all(), use_natural_foreign_keys=True)
@@ -198,27 +260,27 @@ def send_data_to_google_sheet(request):
     except Exception as e:
         logger.error("Failed to send data to Google Sheet: %s", e)
         return JsonResponse({'status': 'error', 'message': str(e), 'count': count})
-def sheet_pull(request):
-    key = request.GET.get('key')
-    if not key:
-        raise BadRequest()
 
-    username, password = base64.b64decode(key).decode('ascii').split(":")
-    user = authenticate(request, username=username, password=password)
-    if not user:
-        raise PermissionDenied()
+
+@permission_required("HeroHours.view_users", raise_exception=True)
+@ratelimit(key='user', rate='30/m', method='GET')
+def sheet_pull(request: HttpRequest) -> HttpResponse:
+    """
+    Export users data to CSV format.
+    This view is deprecated. Use the API endpoint /api/sheet-pull/ with token authentication instead.
+    """
     members = models.Users.objects.all()
     response = 'User_ID,First_Name,Last_Name,Total_Hours,Total_Seconds,Last_In,Last_Out,Is_Active,\n'
     for member in members:
         response += f"{member.User_ID},{member.First_Name},{member.Last_Name},{member.get_total_hours()},{member.Total_Seconds},{member.Last_In},{member.Last_Out},{member.Is_Active}\n"
-    return HttpResponse(response,content_type='text/csv')
+    return HttpResponse(response, content_type='text/csv')
 
 
-def logout_view(request):
+def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
 
 
 @permission_required("HeroHours.change_users")
-def live_view(request):
+def live_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'live.html')
