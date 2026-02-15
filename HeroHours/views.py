@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 @permission_required("HeroHours.change_users")
 def index(request):
+    """
+    Main dashboard view displaying active members and check-in status.
+    
+    Args:
+        request: HTTP request object
+        
+    Returns:
+        HttpResponse: Rendered members.html template with user data
+    """
     # Query all users from the database
     usersData = models.Users.objects.filter(Is_Active=True).order_by('Last_Name','First_Name')
     users_checked_in = models.Users.objects.filter(Checked_In=True).count()
@@ -88,6 +97,15 @@ def handle_entry(request):
 
 
 def handle_special_commands(user_id):
+    """
+    Process special command inputs like 'Send', 'admin', etc.
+    
+    Args:
+        user_id: Input string from user
+        
+    Returns:
+        HttpResponse or None: Redirect response if special command, None otherwise
+    """
     if user_id == "Send":
         return redirect('send_data_to_google_sheet')
 
@@ -101,6 +119,16 @@ def handle_special_commands(user_id):
 
 
 def handle_bulk_updates(user_id, at_time=None):
+    """
+    Bulk check-in or check-out all users (DEBUG mode only for check-in).
+    
+    Args:
+        user_id: '-404' for bulk check-in, '+404' for auto check-out
+        at_time: Optional datetime for the operation, defaults to now
+        
+    Returns:
+        HttpResponse: Redirect to index page
+    """
     if at_time is None:
         at_time = timezone.now()
     updated_users = []
@@ -145,6 +173,18 @@ def handle_bulk_updates(user_id, at_time=None):
 
 
 def check_in_or_out(user, right_now, log, count):
+    """
+    Toggle user check-in status and update hours.
+    
+    Args:
+        user: Users model instance
+        right_now: Current datetime
+        log: ActivityLog instance to save
+        count: Current count of checked-in users
+        
+    Returns:
+        dict: Status information including operation, state, log, and count
+    """
     count2=count
     if user.Checked_In:
         count2 -= 1
@@ -189,6 +229,15 @@ APP_SCRIPT_URL = os.environ.get('APP_SCRIPT_URL', '')
 @permission_required("HeroHours.change_users", raise_exception=True)
 @ratelimit(key='user', rate='10/m', method='POST')
 def send_data_to_google_sheet(request):
+    """
+    Export all users and activity logs to Google Sheets via Apps Script.
+    
+    Args:
+        request: HTTP request object
+        
+    Returns:
+        JsonResponse: Status of the export operation
+    """
     users = models.Users.objects.all()
     serialized_data = serializers.serialize('json', users, use_natural_foreign_keys=True)
     serialized_data2 = serializers.serialize('json', models.ActivityLog.objects.all(), use_natural_foreign_keys=True)

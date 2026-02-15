@@ -101,6 +101,7 @@ def reset(modeladmin, request, queryset):
     models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_Out", "Last_In"])
     models.ActivityLog.objects.bulk_create(updated_log)
 
+@admin.action(description="Create a Staff User")
 def create_staff_user_action(modeladmin, request, queryset):
     selected_user = queryset.first()
     userdata = model_to_dict(selected_user)
@@ -108,9 +109,6 @@ def create_staff_user_action(modeladmin, request, queryset):
     form = CustomActionForm(
         initial={'hidden_data': json.dumps({'First_Name': userdata['First_Name'], 'Last_Name': userdata['Last_Name']})})
     return render(request, 'admin/custom_action_form.html', {'form': form})
-
-
-create_staff_user_action.short_description = "Create a Staff User"
 
 
 class TotalHoursFilter(SimpleListFilter):
@@ -175,11 +173,9 @@ class MemberAdmin(admin.ModelAdmin):
     search_fields = ['User_ID', 'Last_Name', 'First_Name']
     list_filter = ['Checked_In', TotalHoursFilter]
 
+    @admin.display(description="Total Hours", ordering="Total_Seconds")
     def display_total_hours(self, obj):
         return obj.get_total_hours()
-
-    display_total_hours.short_description = "Total Hours"
-    display_total_hours.admin_order_field = "Total_Seconds"
 
 
     """
@@ -277,30 +273,27 @@ class ActivityAdminView(admin.ModelAdmin):
     search_fields = ['timestamp']
     actions = [export_as_csv]
 
+    @admin.display(description='Date')
     def get_date_only(self, obj):
         return timezone.localtime(obj.timestamp).date()
+    
+    @admin.display(description='Entered')
     def get_entered_data(self, obj):
         return obj.entered
-    get_entered_data.short_description = 'Entered'
 
-
-    get_date_only.short_description = 'Date'
-
+    @admin.display(description='Name')
     def get_name(self, obj):
         if obj.user:
             return f'{obj.user.First_Name} {obj.user.Last_Name}'
-        return  'None'
-    get_name.short_description = 'Name'
+        return 'None'
 
+    @admin.display(description='Status')
     def get_status(self, obj):
         return obj.status
 
-    get_status.short_description = 'Status'
-
+    @admin.display(description='Operation')
     def get_op(self, obj):
         return obj.operation
-
-    get_op.short_description = 'Operation'
 
 
 def is_superuser(user):
