@@ -1,13 +1,13 @@
 import csv
 import json
-from datetime import datetime
 from types import SimpleNamespace
 
 import django.contrib.auth.models as authModels
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.contrib.auth.decorators import user_passes_test
-from django.core.exceptions import PermissionDenied, BadRequest
+from django.core.exceptions import PermissionDenied
+from django.db.models import F, DurationField, ExpressionWrapper
 from django.forms import model_to_dict
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -19,7 +19,6 @@ from . import models
 from .models import Users, ActivityLog
 from rest_framework.authtoken.admin import TokenAdmin
 from django.contrib.admin.utils import (unquote)
-from django.contrib.admin.options import get_content_type_for_model
 from django.template.response import TemplateResponse
 # Register your models here.
 
@@ -31,18 +30,21 @@ def check_out(modeladmin, request, queryset):
     getall = queryset.filter(Checked_In=True)
     updated_users = []
     updated_log = []
+    right_now = timezone.now()
     for user in getall:
         lognew = models.ActivityLog(
             user_id=user.User_ID,
+            entered=user.User_ID,
             operation='Check Out',
-            status='Success',  # Initial status
+            status='Success',
         )
         user.Checked_In = False
-        user.Total_Hours = (
-                datetime.combine(datetime.today(), user.Total_Hours) + (timezone.now() - user.Last_In)).time()
-        #print((timezone.now() - user.Last_In).total_seconds())
-        user.Total_Seconds += round((timezone.now() - user.Last_In).total_seconds())
-        user.Last_Out = timezone.now()
+        if not user.Last_In:
+            user.Last_In = right_now
+        user.Total_Hours = ExpressionWrapper(F('Total_Hours') + (right_now - user.Last_In),
+                                             output_field=DurationField())
+        user.Total_Seconds = F('Total_Seconds') + round((right_now - user.Last_In).total_seconds())
+        user.Last_Out = right_now
         updated_log.append(lognew)
         updated_users.append(user)
     models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_Out"])
@@ -53,18 +55,20 @@ def check_out(modeladmin, request, queryset):
 def check_in(modeladmin, request, queryset):
     updated_users = []
     updated_log = []
+    right_now = timezone.now()
     getall = queryset.filter(Checked_In=False)
     for user in getall:
         lognew = models.ActivityLog(
             user_id=user.User_ID,
+            entered=user.User_ID,
             operation='Check In',
-            status='Success',  # Initial status
+            status='Success',
         )
         user.Checked_In = True
-        user.Last_In = timezone.now()
+        user.Last_In = right_now
         updated_log.append(lognew)
         updated_users.append(user)
-    models.Users.objects.bulk_update(updated_users, ["Checked_In", "Total_Hours", "Total_Seconds", "Last_Out"])
+    models.Users.objects.bulk_update(updated_users, ["Checked_In", "Last_In"])
     models.ActivityLog.objects.bulk_create(updated_log)
 
 @admin.action(description="Reset Members")
@@ -74,8 +78,9 @@ def reset(modeladmin, request, queryset):
     for user in queryset:
         lognew = models.ActivityLog(
             user_id=user.User_ID,
+            entered=user.User_ID,
             operation='Reset',
-            status='Success',  # Initial status
+            status='Success',
         )
         user.Total_Seconds = 0
         user.Total_Hours = '0:00:00'
@@ -86,6 +91,7 @@ def reset(modeladmin, request, queryset):
             updated_log.append(
                 models.ActivityLog(
                     user_id=user.User_ID,
+                    entered=user.User_ID,
                     operation='Check Out',
                     status='Success',
                 )
@@ -96,7 +102,6 @@ def reset(modeladmin, request, queryset):
     models.ActivityLog.objects.bulk_create(updated_log)
 
 def create_staff_user_action(modeladmin, request, queryset):
-    print(request)
     selected_user = queryset.first()
     userdata = model_to_dict(selected_user)
 
@@ -306,7 +311,6 @@ def is_superuser(user):
 def add_user(request):
     form_data_dict = request.POST.dict()
     form_data = SimpleNamespace(**form_data_dict)
-    print(form_data)
     username = form_data.username
     password = form_data.password
     hidden_data = json.loads(form_data.hidden_data)
@@ -314,9 +318,7 @@ def add_user(request):
     lname = hidden_data['Last_Name']
     group_name = form_data.group_name
 
-    if authModels.User.objects.filter(username=username).exists():
-        print('User already exists')
-    else:
+    if not authModels.User.objects.filter(username=username).exists():
         user = authModels.User.objects.create_user(username=username,
                                                    first_name=fname,
                                                    last_name=lname)
@@ -325,10 +327,7 @@ def add_user(request):
         user.save()
 
         group = authModels.Group.objects.get(name=group_name)
-        print(group)
         user.groups.add(group)
-
-        print('nicely done')
 
     return redirect('/admin/')
 

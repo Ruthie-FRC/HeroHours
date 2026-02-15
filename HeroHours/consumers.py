@@ -1,16 +1,9 @@
-import json
-
-from channels.generic.websocket import AsyncWebsocketConsumer
-from django.contrib.auth.decorators import permission_required
 from djangochannelsrestframework.decorators import action
 from djangochannelsrestframework.observer import model_observer
 from djangochannelsrestframework.observer.generics import ObserverModelInstanceMixin
-from djangochannelsrestframework.permissions import WrappedDRFPermission, IsAuthenticated
+from djangochannelsrestframework.permissions import IsAuthenticated
 from rest_framework import serializers
-from rest_framework.permissions import DjangoModelPermissions
 
-from . import models
-from djangochannelsrestframework import permissions
 from djangochannelsrestframework.generics import GenericAsyncAPIConsumer
 from djangochannelsrestframework.mixins import (
     ListModelMixin, RetrieveModelMixin,

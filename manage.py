@@ -7,6 +7,9 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'HeroHoursRemake.settings')
+    if len(sys.argv) >= 2 and sys.argv[1] == 'runserver':
+        if not any(arg.startswith(('127.0.0.1:', 'localhost:', '0.0.0.0:')) for arg in sys.argv[2:]):
+            sys.argv.append('127.0.0.1:5892')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
