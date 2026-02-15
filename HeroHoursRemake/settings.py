@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'HeroHours.apps.HeroHoursConfig',
-    'debug_toolbar',
+    'HeroHours_api.apps.HerohoursApiConfig',
     'rest_framework',
     'rest_framework.authtoken',
 ]
@@ -54,16 +54,18 @@ LOGIN_REDIRECT_URL = '/HeroHours/'
 LOGIN_URL = '/HeroHours/login/'
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'HeroHours.middleware.TimeItMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
+
+if DEBUG:
+    INSTALLED_APPS += ['debug_toolbar']
+    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
 INTERNAL_IPS = ['127.0.0.1']
 ROOT_URLCONF = 'HeroHoursRemake.urls'
 
@@ -101,7 +103,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     },
-    'default': dj_database_url.config(default=os.environ['DATABASE_URL'], conn_max_age=600, ssl_require=not DEBUG)
+    'default': dj_database_url.config(default=os.environ.get('DATABASE_URL', ''), conn_max_age=600, ssl_require=not DEBUG)
 }
 default_database = os.environ.get('DJANGO_DATABASE', 'default')
 DATABASES['default'] = DATABASES[default_database]
@@ -144,7 +146,11 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -156,4 +162,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CSRF_TRUSTED_ORIGINS = ['https://hero-hours-2bf608a75758.herokuapp.com']
 SECURE_SSL_REDIRECT = not DEBUG
 APPEND_SLASH = True
-SESSION_COOKIE_AGE=39600
+SESSION_COOKIE_AGE = 39600
+
+# Security settings for production
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
