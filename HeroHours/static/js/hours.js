@@ -11,6 +11,7 @@ function playSound(status) {
 
     switch (status) {
       case "Success":
+      case "Check In":
         audio = successAudio;
         break;
       case "User Not Found":
@@ -53,7 +54,7 @@ window.onload = function () {
 function updateTime() {
   const timeDiv = document.querySelector(".time");
   const now = new Date();
-  const prehours = now.getHours() == 12? 12 : now.getHours() % 12;
+  const prehours = now.getHours() === 0 ? 12 : (now.getHours() > 12 ? now.getHours() - 12 : now.getHours());
   const hours = prehours.toString().padStart(2, "0");
   const minutes = now.getMinutes().toString().padStart(2, "0");
   const seconds = now.getSeconds().toString().padStart(2, "0");
@@ -85,7 +86,6 @@ document.addEventListener("DOMContentLoaded", function (event) {
 });
 
 async function handleFormSubmission(event) {
-  console.time('benchmark');
   let serialized_data = new URLSearchParams(new FormData(this)).toString();
   let data = serialized_data.split("&")[1].split("=")[1];
   if (data === "-404" || data === "%2B404" || data === "*"||data === 'admin'||data === '---') {
@@ -100,24 +100,20 @@ async function handleFormSubmission(event) {
     return;
   }
   // submit the form ourselves
-  const req = await fetch(queryUrl, {
-    headers: {
-      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-      'X-Requested-With': 'XMLHttpRequest'
-    },
-    body: serialized_data.toString().replaceAll("ID+",""),
-    method: "POST",
-  }).then(async function (response) {
-    console.log(response)
-    console.timeLog('benchmark');
+  try {
+    const response = await fetch(queryUrl, {
+      headers: {
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: serialized_data.toString().replaceAll("ID+",""),
+      method: "POST",
+    });
     //handle the form response ourselves
     document.getElementById("subID").reset(); // reset the input box
     if (response.ok) {
-      console.log(new Date())
-      console.debug(response);
       // read the body
       let body = await response.json();
-      console.debug(body);
       if (body.status == "Sent") return;
       // Play the sound based on the response
       playSound(body.status);
@@ -135,23 +131,30 @@ async function handleFormSubmission(event) {
       console.error("Error:", response);
       addRow({
         id: 0,
-        userID: data,
+        entered: data,
         operation: "None",
         status: response.statusText,
         message: "",
       });
     }
-  });
-  console.timeEnd('benchmark');
+  } catch (error) {
+    console.error("Fetch error:", error);
+    document.getElementById("subID").reset(); // reset the input box on error
+    addRow({
+      id: 0,
+      entered: data,
+      operation: "None",
+      status: "Error",
+      message: error.message || "",
+    });
+  }
 }
 
-async function addRow(item) {
-  console.log(item);
+function addRow(item) {
   // Get the table body
   let table = document.getElementById("logBody");
   let colorClass;
   let operationClass;
-  console.log(item);
   switch (item.status) {
     case "User Not Found":
       colorClass = "warning";
@@ -201,6 +204,6 @@ async function addRow(item) {
   cell3.innerHTML = `<span class="${colorClass} label">${item.status}&nbsp;${item.message}</span>`;
 }
 document.addEventListener('keydown', function(event) {
-    if( event.keyCode == 17 || event.keyCode == 74 )
+    if (event.key === 'Control' || event.key === 'j')
       event.preventDefault();
   });

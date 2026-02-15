@@ -24,7 +24,7 @@ let username = document.getElementsByName("username")[0];
     function updateTime() {
         const timeDiv = document.querySelector(".time");
         const now = new Date();
-        const prehours = now.getHours() % 12;
+        const prehours = now.getHours() === 0 ? 12 : (now.getHours() > 12 ? now.getHours() - 12 : now.getHours());
         const hours = prehours.toString().padStart(2, "0");
         const minutes = now.getMinutes().toString().padStart(2, "0");
         const seconds = now.getSeconds().toString().padStart(2, "0");
@@ -65,6 +65,6 @@ let username = document.getElementsByName("username")[0];
       username.focus();
     });
   document.addEventListener('keydown', function(event) {
-    if( event.keyCode == 17 || event.keyCode == 74 )
+    if (event.key === 'Control' || event.key === 'j')
       event.preventDefault();
   });
